@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'drf_yasg',
     'accounts',  # Your custom app
     'corsheaders',
-    'rest_framework_simplejwt'
+    'rest_framework_simplejwt',
+    'organizer'
 ]
 
 MIDDLEWARE = [
@@ -60,6 +61,7 @@ ROOT_URLCONF = 'evote.urls'
 AUTH_USER_MODEL = "accounts.CustomUser"
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
+    'accounts.authentication.EmailBackend',  # Custom authentication backend
 ]
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

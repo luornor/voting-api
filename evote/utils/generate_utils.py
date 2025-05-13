@@ -1,4 +1,4 @@
 import uuid
 
-def generate_user_id():
+def generate_ids():
     return str(uuid.uuid4())

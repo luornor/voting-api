@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager,PermissionsMixin
 
-from utils.generate_utils import generate_user_id
+from utils.generate_utils import generate_ids
 
 
 class CustomUserManager(BaseUserManager):
@@ -14,7 +14,7 @@ class CustomUserManager(BaseUserManager):
             username=username,
             role=role,
             phone_number=phone_number,
-
+            is_active=True 
         )
 
         user.set_password(password)
@@ -42,7 +42,7 @@ class CustomUser(AbstractBaseUser,PermissionsMixin):
         
     role = models.CharField(max_length=20, choices=Roles.choices, default=Roles.ORGANIZER, blank=True, null=True)
     email = models.EmailField(verbose_name='email address', max_length=255, unique=True, null=True, blank=True)
-    user_id = models.CharField(default=generate_user_id, unique=True)
+    user_id = models.CharField(default=generate_ids, unique=True)
     username = models.CharField(max_length=255, unique=True)
     phone_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
     date_created = models.DateTimeField(auto_now_add=True)
@@ -64,20 +64,3 @@ class CustomUser(AbstractBaseUser,PermissionsMixin):
     def has_module_perms(self, app_label):
         return True
 
-
-
-
-
-
-# class EmailVerification(models.Model):
-#     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE,related_name='email_verification')
-#     code = models.CharField(max_length=32, unique=True)
-#     verified = models.BooleanField(default=False)
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     expiry_date =  models.DateTimeField(default=timezone.now() + timedelta(minutes=15))
-
-#     def __str__(self):
-#         return self.user.email
-    
-#     def is_expired(self):
-#         return timezone.now() > self.expiry_date

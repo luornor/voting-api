@@ -41,8 +41,8 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # Include the accounts app URLs
-    path('api/', include('accounts.urls')),
+    path('api/users/', include('accounts.urls')),
+    path('api/organizer/', include('organizer.urls')),
     # Swagger URLs
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

@@ -59,13 +59,12 @@ class RegisterView(generics.CreateAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # verify phone number
         user = serializer.save()
-        tokens = get_tokens_for_user(user)
         return Response({
+            'message': 'User registered successfully.',
             'user': UserSerializer(user).data,
-            'tokens': tokens
         }, status=status.HTTP_201_CREATED)
+
 
 
 class LoginView(generics.GenericAPIView):
@@ -83,9 +82,11 @@ class LoginView(generics.GenericAPIView):
         user = serializer.validated_data['user']
         tokens = get_tokens_for_user(user)
         return Response({
+            'message': 'Login successful.',
             'user': UserSerializer(user).data,
             'tokens': tokens
         }, status=status.HTTP_200_OK)
+
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -103,7 +104,11 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         responses={200: UserSerializer}
     )
     def get(self, request, *args, **kwargs):
-        return self.retrieve(request, *args, **kwargs)
+        user_data = UserSerializer(request.user).data
+        return Response({
+            'message': 'User profile retrieved successfully.',
+            'user': user_data
+        }, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
         operation_summary="Update user profile",
@@ -113,7 +118,12 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         request_body=UserSerializer
     )
     def put(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
+        response = self.update(request, *args, **kwargs)
+        response.data = {
+            'message': 'Profile updated successfully.',
+            'user': response.data
+        }
+        return response
 
     @swagger_auto_schema(
         operation_summary="Partially update user profile",
@@ -123,5 +133,10 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         request_body=UserSerializer
     )
     def patch(self, request, *args, **kwargs):
-        return self.partial_update(request, *args, **kwargs)
+        response = self.partial_update(request, *args, **kwargs)
+        response.data = {
+            'message': 'Profile partially updated successfully.',
+            'user': response.data
+        }
+        return response
 
