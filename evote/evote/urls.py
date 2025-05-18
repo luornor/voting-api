@@ -32,7 +32,8 @@ schema_view = get_schema_view(
    public=True,
    permission_classes=(permissions.AllowAny,),
    patterns=[
-         path('api/', include('accounts.urls')),  # Include your app's URLs here
+         path('api/users/', include('accounts.urls')),  # Include your app's URLs here
+         path('api/organizer/', include('organizer.urls')),  # Include your app's URLs here
     ],
     urlconf='evote.urls',  # Specify the URL configuration module
     authentication_classes=(JWTAuthentication,),

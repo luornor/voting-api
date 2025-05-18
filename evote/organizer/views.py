@@ -1,16 +1,15 @@
-from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView,RetrieveUpdateDestroyAPIView
 from .models import Event
 from .serializers import EventSerializer
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from .models import Contestant
-from .serializers import ContestantSerializer
+from .serializers import ContestantSerializer,VoteSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
-from .models import Vote, Contestant
-from .serializers import VoteSerializer
-from django.db.models import Q
+from .models import Contestant
+
 
 class EventCreateView(CreateAPIView):
     serializer_class = EventSerializer
@@ -71,6 +70,43 @@ class EventDetailView(RetrieveAPIView):
             "message": "Event retrieved successfully.",
             "event": serializer.data
         }, status=status.HTTP_200_OK)
+    
+
+
+class EventUpdateDeleteView(RetrieveUpdateDestroyAPIView):
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        obj = super().get_object()
+        if obj.organizer != self.request.user:
+            raise PermissionDenied("You are not authorized to modify this event.")
+        return obj
+
+    @swagger_auto_schema(
+        operation_summary="Update an event",
+        operation_description="Allows the organizer to update their event.",
+        tags=["Events"]
+    )
+    def put(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        response.data = {
+            "message": "Event updated successfully.",
+            "event": response.data
+        }
+        return response
+
+    @swagger_auto_schema(
+        operation_summary="Delete an event",
+        operation_description="Allows the organizer to delete their event.",
+        tags=["Events"]
+    )
+    def delete(self, request, *args, **kwargs):
+        super().delete(request, *args, **kwargs)
+        return Response({
+            "message": "Event deleted successfully."
+        }, status=status.HTTP_204_NO_CONTENT)
 
 
 class ContestantCreateView(CreateAPIView):
@@ -116,6 +152,42 @@ class ContestantListView(ListAPIView):
         }, status=status.HTTP_200_OK)
 
 
+class ContestantUpdateDeleteView(RetrieveUpdateDestroyAPIView):
+    queryset = Contestant.objects.all()
+    serializer_class = ContestantSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        obj = super().get_object()
+        if obj.event.organizer != self.request.user:
+            raise PermissionDenied("You are not authorized to modify this contestant.")
+        return obj
+
+    @swagger_auto_schema(
+        operation_summary="Update a contestant",
+        operation_description="Allows the organizer to update a contestant in their event.",
+        tags=["Contestants"]
+    )
+    def put(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        response.data = {
+            "message": "Contestant updated successfully.",
+            "contestant": response.data
+        }
+        return response
+
+    @swagger_auto_schema(
+        operation_summary="Delete a contestant",
+        operation_description="Allows the organizer to delete a contestant from their event.",
+        tags=["Contestants"]
+    )
+    def delete(self, request, *args, **kwargs):
+        super().delete(request, *args, **kwargs)
+        return Response({
+            "message": "Contestant deleted successfully."
+        }, status=status.HTTP_204_NO_CONTENT)
+
+
 class VoteCreateView(CreateAPIView):
     serializer_class = VoteSerializer
     permission_classes = [AllowAny]
@@ -125,28 +197,25 @@ class VoteCreateView(CreateAPIView):
         return x_forwarded.split(',')[0] if x_forwarded else request.META.get('REMOTE_ADDR')
 
     @swagger_auto_schema(
-        operation_summary="Cast a vote for a contestant",
-        operation_description="Allows anonymous users to vote. One vote per IP per contestant.",
+        operation_summary="Cast one or more votes for a contestant",
+        operation_description="Anonymous users can vote for a contestant. Number of votes and amount calculated.",
         tags=["Votes"]
     )
     def create(self, request, *args, **kwargs):
         ip = self.get_client_ip(request)
-        contestant_id = request.data.get("contestant")
-
-        if Vote.objects.filter(contestant_id=contestant_id, voter_ip=ip).exists():
-            return Response({
-                "message": "You have already voted for this contestant from this IP."
-            }, status=status.HTTP_400_BAD_REQUEST)
-
         request.data['voter_ip'] = ip
+        if 'quantity' not in request.data:
+            request.data['quantity'] = 1  # default
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
         return Response({
-            "message": "Vote cast successfully.",
+            "message": f"{serializer.validated_data['quantity']} vote(s) cast successfully.",
             "vote": serializer.data
         }, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         serializer.save()
+

@@ -2,7 +2,13 @@ from rest_framework import serializers
 from .models import Event
 from .models import Contestant
 from .models import Vote
-from serializers import ContestantSerializer
+
+class ContestantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contestant
+        fields = ['id', 'event', 'contestant_name', 'bio', 'photo_url', 'vote_count']
+        read_only_fields = ['vote_count']
+
 
 class EventSerializer(serializers.ModelSerializer):
     organizer = serializers.ReadOnlyField(source='organizer.username')  # or .id if you prefer
@@ -24,16 +30,16 @@ class EventSerializer(serializers.ModelSerializer):
         ]
 
 
-class ContestantSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Contestant
-        fields = ['id', 'event', 'contestant_name', 'bio', 'photo_url', 'vote_count']
-        read_only_fields = ['vote_count']
-
-
 
 class VoteSerializer(serializers.ModelSerializer):
+    total_amount = serializers.SerializerMethodField()
+
     class Meta:
         model = Vote
-        fields = ['id', 'contestant', 'timestamp']
-        read_only_fields = ['timestamp']
+        fields = ['id', 'contestant', 'quantity', 'timestamp', 'total_amount']
+        read_only_fields = ['timestamp', 'total_amount']
+
+    def get_total_amount(self, obj):
+        price = obj.contestant.event.price_per_vote or 0
+        return price * obj.quantity
+

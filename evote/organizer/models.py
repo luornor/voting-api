@@ -41,7 +41,19 @@ class Contestant(models.Model):
 class Vote(models.Model):
     contestant = models.ForeignKey('Contestant', on_delete=models.CASCADE, related_name='votes')
     timestamp = models.DateTimeField(auto_now_add=True)
-    voter_ip = models.GenericIPAddressField(null=True, blank=True) 
+    voter_ip = models.GenericIPAddressField(null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
 
     def __str__(self):
-        return f"Vote for {self.contestant.contestant_name} at {self.timestamp}"
+        return f"{self.quantity} vote(s) for {self.contestant.contestant_name} at {self.timestamp}"
+
+
+class Payment(models.Model):
+    vote = models.OneToOneField(Vote, on_delete=models.CASCADE, related_name='payment')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.PositiveIntegerField()
+    reference = models.CharField(max_length=255, unique=True)
+    status = models.CharField(max_length=20, default='pending')  # or use choices
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

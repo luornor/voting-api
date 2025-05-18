@@ -1,40 +1,40 @@
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
+from rest_framework.views import APIView, status
+from rest_framework.generics import CreateAPIView, GenericAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from rest_framework import generics, status
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
 from .serializers import RegisterSerializer, LoginSerializer, UserSerializer
 
 
-class RootAPIView(APIView):
-    permission_classes = [AllowAny]
+# class RootAPIView(APIView):
+#     permission_classes = [AllowAny]
 
-    @swagger_auto_schema(
-        operation_summary="Root API Endpoint",
-        operation_description="Provides the URLs for the available endpoints in the API.",
-        responses={
-            200: openapi.Response(
-                'Successful operation',
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                )
-            )
-        },
-        tags=['Root']
-    )
-    def get(self, request, *args, **kwargs):
-        api_urls = {
-            "Register": "/api/users/register/",
-            "Login": "/api/users/login/",
-            "User Profile (GET/PUT)": "/api/users/profile/",
-            "Swagger Docs": "/swagger/",
-            "Admin Panel": "/admin/"
-        }
-        return Response(api_urls, status=status.HTTP_200_OK)
+#     @swagger_auto_schema(
+#         operation_summary="Root API Endpoint",
+#         operation_description="Provides the URLs for the available endpoints in the API.",
+#         responses={
+#             200: openapi.Response(
+#                 'Successful operation',
+#                 schema=openapi.Schema(
+#                     type=openapi.TYPE_OBJECT,
+#                 )
+#             )
+#         },
+#         tags=['Root']
+#     )
+#     def get(self, request, *args, **kwargs):
+#         api_urls = {
+#             "Register": "/api/users/register/",
+#             "Login": "/api/users/login/",
+#             "User Profile (GET/PUT)": "/api/users/profile/",
+#             "Swagger Docs": "/swagger/",
+#             "Admin Panel": "/admin/"
+#         }
+#         return Response(api_urls, status=status.HTTP_200_OK)
     
 
 
@@ -46,7 +46,7 @@ def get_tokens_for_user(user):
     }
 
 
-class RegisterView(generics.CreateAPIView):
+class RegisterView(CreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = RegisterSerializer
 
@@ -67,7 +67,7 @@ class RegisterView(generics.CreateAPIView):
 
 
 
-class LoginView(generics.GenericAPIView):
+class LoginView(GenericAPIView):
     serializer_class = LoginSerializer
 
     @swagger_auto_schema(
@@ -89,7 +89,7 @@ class LoginView(generics.GenericAPIView):
 
 
 
-class ProfileView(generics.RetrieveUpdateAPIView):
+class ProfileView(RetrieveUpdateAPIView):
     queryset = CustomUser.objects.all()
     permission_classes = [IsAuthenticated]
     serializer_class = UserSerializer
