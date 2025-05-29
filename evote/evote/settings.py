@@ -22,6 +22,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-+x&*z6y)n*hw#udgo!mueoyr@w$ag2=)5#hm8+&65(7xf(tg&a'
 
+PAYSTACK_SECRET_KEY = 'sk_test_6c0cb2d45311c03b7476c5e2a061fe2cdd9f5c6a'
+PAYSTACK_PUBLIC_KEY = 'pk_test_80eebac412eca3fa2a4da650c1d677e93f1a9bb7'
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -89,6 +92,9 @@ TEMPLATES = [
         },
     },
 ]
+
+
+
 
 WSGI_APPLICATION = 'evote.wsgi.application'
 

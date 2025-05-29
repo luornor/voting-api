@@ -49,11 +49,24 @@ class Vote(models.Model):
 
 
 class Payment(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+    ]
     vote = models.OneToOneField(Vote, on_delete=models.CASCADE, related_name='payment')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField()
     reference = models.CharField(max_length=255, unique=True)
-    status = models.CharField(max_length=20, default='pending')  # or use choices
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+
+    provider = models.CharField(max_length=20, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+    def __str__(self):
+        return f"{self.reference} - {self.status}"
+

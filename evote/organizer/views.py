@@ -8,7 +8,11 @@ from .serializers import ContestantSerializer,VoteSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
-from .models import Contestant
+from .models import Contestant, Vote
+import requests
+from django.conf import settings
+from rest_framework.views import APIView
+
 
 
 class EventCreateView(CreateAPIView):
@@ -188,34 +192,183 @@ class ContestantUpdateDeleteView(RetrieveUpdateDestroyAPIView):
         }, status=status.HTTP_204_NO_CONTENT)
 
 
-class VoteCreateView(CreateAPIView):
-    serializer_class = VoteSerializer
+from django.shortcuts import get_object_or_404
+
+
+class VoteCreateView(APIView):
     permission_classes = [AllowAny]
 
-    def get_client_ip(self, request):
-        x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-        return x_forwarded.split(',')[0] if x_forwarded else request.META.get('REMOTE_ADDR')
-
     @swagger_auto_schema(
-        operation_summary="Cast one or more votes for a contestant",
-        operation_description="Anonymous users can vote for a contestant. Number of votes and amount calculated.",
+        operation_summary="Get contestant details before voting",
+        operation_description="Returns details of a specific contestant (name, category, etc.)",
         tags=["Votes"]
     )
-    def create(self, request, *args, **kwargs):
-        ip = self.get_client_ip(request)
-        request.data['voter_ip'] = ip
-        if 'quantity' not in request.data:
-            request.data['quantity'] = 1  # default
+    def get(self, request, contestant_id, *args, **kwargs):
+        contestant = get_object_or_404(Contestant, id=contestant_id)
+        return Response({
+            "message": "Contestant retrieved successfully.",
+            "contestant": {
+                "id": contestant.id,
+                "name": contestant.contestant_name,
+                "bio": contestant.bio,
+                "photo_url": contestant.photo_url,
+                "event": contestant.event.event_name
+            }
+        }, status=status.HTTP_200_OK)
 
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+
+
+
+class PaystackInitPaymentView(APIView):
+    permission_classes = [AllowAny]
+
+    SUPPORTED_PROVIDERS = ['mtn', 'vodafone', 'airteltigo']
+
+    @swagger_auto_schema(
+        operation_summary="Initiate Mobile Money payment via Paystack",
+        operation_description=(
+            "Initiates a Paystack Mobile Money payment using voter's phone number. "
+            "Supported providers: MTN, Vodafone, AirtelTigo."
+        ),
+        tags=["Payments"]
+    )
+    def post(self, request, *args, **kwargs):
+        phone = request.data.get("phone_number")
+        quantity = int(request.data.get("quantity", 1))
+        contestant_id = request.data.get("contestant_id")
+        provider = request.data.get("provider", "").lower()
+
+        if not all([phone, quantity, contestant_id, provider]):
+            return Response({
+                "message": "phone_number, quantity, contestant_id, and provider are required."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if provider not in self.SUPPORTED_PROVIDERS:
+            return Response({
+                "message": f"Invalid provider. Supported: {', '.join(self.SUPPORTED_PROVIDERS)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            contestant = Contestant.objects.select_related('event').get(id=contestant_id)
+        except Contestant.DoesNotExist:
+            return Response({"message": "Invalid contestant."}, status=status.HTTP_404_NOT_FOUND)
+
+        price_per_vote = contestant.event.price_per_vote or 0
+        amount_kobo = int(price_per_vote * quantity * 100)
+
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        email = f"{phone}@votemomo.app"  # synthetic email for Paystack
+
+        data = {
+            "email": email,
+            "amount": amount_kobo,
+            "channels": ["mobile_money"],
+            "mobile_money": {
+                "phone": phone,
+                "provider": provider
+            },
+            "metadata": {
+                "contestant_id": contestant_id,
+                "quantity": quantity,
+                "phone_number": phone,
+                "provider": provider
+            }
+        }
+
+        response = requests.post("https://api.paystack.co/transaction/initialize",
+                                 json=data, headers=headers)
+
+        if response.status_code != 200:
+            return Response({
+                "message": "Failed to initiate payment.",
+                "details": response.json()
+            }, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({
-            "message": f"{serializer.validated_data['quantity']} vote(s) cast successfully.",
-            "vote": serializer.data
+            "message": "Mobile Money payment initialized successfully.",
+            "payment_url": response.json().get("data", {}).get("authorization_url"),
+            "reference": response.json().get("data", {}).get("reference")
+        }, status=status.HTTP_200_OK)
+
+from .models import Payment
+from datetime import datetime
+
+class PaystackVerifyPaymentView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        operation_summary="Verify Paystack payment",
+        operation_description="Verifies payment by reference and creates a vote if successful.",
+        tags=["Payments"]
+    )
+    def post(self, request, *args, **kwargs):
+        reference = request.data.get("reference")
+        if not reference:
+            return Response({"message": "Reference is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        url = f"https://api.paystack.co/transaction/verify/{reference}"
+        response = requests.get(url, headers=headers)
+        result = response.json()
+
+        if response.status_code != 200 or not result.get("status"):
+            return Response({
+                "message": "Verification failed.",
+                "details": result
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        data = result["data"]
+        if data["status"] != "success":
+            return Response({"message": "Payment not successful."}, status=status.HTTP_402_PAYMENT_REQUIRED)
+
+        # Get metadata
+        metadata = data.get("metadata", {})
+        timestamp = data.get("paid_at")
+        contestant_id = metadata.get("contestant_id")
+        quantity = int(metadata.get("quantity", 1))
+        ip = request.META.get("REMOTE_ADDR")
+        phone_number = metadata.get("phone_number")
+        provider = metadata.get("provider")
+
+
+        try:
+            contestant = Contestant.objects.select_related('event').get(id=contestant_id)
+        except Contestant.DoesNotExist:
+            return Response({"message": "Invalid contestant."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Create Vote
+        vote = Vote.objects.create(
+            contestant=contestant,
+            timestamp = timestamp,
+            voter_ip=ip,
+            quantity=quantity,
+        )
+
+        # Create Payment record
+        Payment.objects.create(
+            vote=vote,
+            amount=(data["amount"] / 100),
+            quantity=quantity,
+            reference=reference,
+            phone_number=phone_number,
+            provider=provider,
+            status=data["status"],
+            paid_at=datetime.strptime(data["paid_at"], "%Y-%m-%dT%H:%M:%S.%fZ")
+        )
+
+        return Response({
+            "message": "Payment verified and vote recorded successfully.",
+            "vote": {
+                "contestant": contestant.contestant_name,
+                "quantity": vote.quantity,
+                "timestamp": vote.timestamp
+            }
         }, status=status.HTTP_201_CREATED)
-
-    def perform_create(self, serializer):
-        serializer.save()
-
