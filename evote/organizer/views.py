@@ -12,9 +12,12 @@ from .models import Contestant, Vote
 import requests
 from django.conf import settings
 from rest_framework.views import APIView
+from drf_yasg import openapi
+from .models import Payment
+from datetime import datetime
+from .serializers import PaystackVerifyRequestSerializer
 
-
-
+# This view handles the creation of events by organizers.
 class EventCreateView(CreateAPIView):
     serializer_class = EventSerializer
     permission_classes = [IsAuthenticated]
@@ -22,7 +25,7 @@ class EventCreateView(CreateAPIView):
     @swagger_auto_schema(
         operation_summary="Create a new event",
         operation_description="Authenticated users (organizers) can create events.",
-        tags=["Events"]
+        tags=["organizer"]
     )
     def perform_create(self, serializer):
         self.created_event = serializer.save(organizer=self.request.user)
@@ -46,7 +49,7 @@ class EventListView(ListAPIView):
     @swagger_auto_schema(
         operation_summary="List organizer's events",
         operation_description="List all events created by the authenticated organizer.",
-        tags=["Events"]
+        tags=["organizer"]
     )
     def get(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -65,7 +68,7 @@ class EventDetailView(RetrieveAPIView):
     @swagger_auto_schema(
         operation_summary="Public single event view",
         operation_description="Anyone can view details of a specific event by ID.",
-        tags=["Events"]
+        tags=["organizer"]
     )
     def get(self, request, *args, **kwargs):
         event = self.get_object()
@@ -91,7 +94,7 @@ class EventUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     @swagger_auto_schema(
         operation_summary="Update an event",
         operation_description="Allows the organizer to update their event.",
-        tags=["Events"]
+        tags=["organizer"]
     )
     def put(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
@@ -104,7 +107,7 @@ class EventUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     @swagger_auto_schema(
         operation_summary="Delete an event",
         operation_description="Allows the organizer to delete their event.",
-        tags=["Events"]
+        tags=["organizer"]
     )
     def delete(self, request, *args, **kwargs):
         super().delete(request, *args, **kwargs)
@@ -112,6 +115,7 @@ class EventUpdateDeleteView(RetrieveUpdateDestroyAPIView):
             "message": "Event deleted successfully."
         }, status=status.HTTP_204_NO_CONTENT)
 
+# # Contestant Views
 
 class ContestantCreateView(CreateAPIView):
     serializer_class = ContestantSerializer
@@ -120,19 +124,23 @@ class ContestantCreateView(CreateAPIView):
     @swagger_auto_schema(
         operation_summary="Add a contestant to an event",
         operation_description="Organizer can add a contestant to their event.",
-        tags=["Contestants"]
+        tags=["organizer"]
     )
     def create(self, request, *args, **kwargs):
         event_id = request.data.get("event")
-        event = Event.objects.get(id=event_id)
+        event = Event.objects.get(event_id=event_id)
+
         if event.organizer != request.user:
             raise PermissionDenied("You are not authorized to add contestants to this event.")
+
         response = super().create(request, *args, **kwargs)
-        response.data = {
+
+        return Response({
             "message": "Contestant added successfully.",
-            "contestant": response.data
-        }
-        return response
+            "contestant": response.data,
+            "event": EventSerializer(event).data
+        }, status=status.HTTP_201_CREATED)
+
 
 
 class ContestantListView(ListAPIView):
@@ -145,7 +153,7 @@ class ContestantListView(ListAPIView):
     @swagger_auto_schema(
         operation_summary="List contestants for an event",
         operation_description="Anyone can view contestants in a specific event.",
-        tags=["Contestants"]
+        tags=["organizer"]
     )
     def get(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -170,7 +178,7 @@ class ContestantUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     @swagger_auto_schema(
         operation_summary="Update a contestant",
         operation_description="Allows the organizer to update a contestant in their event.",
-        tags=["Contestants"]
+        tags=["organizer"]
     )
     def put(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
@@ -183,7 +191,7 @@ class ContestantUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     @swagger_auto_schema(
         operation_summary="Delete a contestant",
         operation_description="Allows the organizer to delete a contestant from their event.",
-        tags=["Contestants"]
+        tags=["organizer"]
     )
     def delete(self, request, *args, **kwargs):
         super().delete(request, *args, **kwargs)
@@ -194,7 +202,7 @@ class ContestantUpdateDeleteView(RetrieveUpdateDestroyAPIView):
 
 from django.shortcuts import get_object_or_404
 
-
+# Vote Views
 class VoteCreateView(APIView):
     permission_classes = [AllowAny]
 
@@ -217,7 +225,8 @@ class VoteCreateView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-
+# This view handles the creation of votes for contestants.
+from .serializers import PaystackInitRequestSerializer
 
 class PaystackInitPaymentView(APIView):
     permission_classes = [AllowAny]
@@ -225,13 +234,29 @@ class PaystackInitPaymentView(APIView):
     SUPPORTED_PROVIDERS = ['mtn', 'vodafone', 'airteltigo']
 
     @swagger_auto_schema(
+        request_body=PaystackInitRequestSerializer,
         operation_summary="Initiate Mobile Money payment via Paystack",
         operation_description=(
             "Initiates a Paystack Mobile Money payment using voter's phone number. "
             "Supported providers: MTN, Vodafone, AirtelTigo."
         ),
+        responses={
+            200: openapi.Response(
+                description="Payment initialized successfully.",
+                examples={
+                    "application/json": {
+                        "message": "Mobile Money payment initialized successfully.",
+                        "payment_url": "https://paystack.com/pay/xyz123abc",
+                        "reference": "txn_ref_001"
+                    }
+                }
+            ),
+            400: "Missing phone_number, quantity, contestant_id, or provider.",
+            502: "Failed to initiate payment with Paystack."
+        },
         tags=["Payments"]
     )
+
     def post(self, request, *args, **kwargs):
         phone = request.data.get("phone_number")
         quantity = int(request.data.get("quantity", 1))
@@ -294,17 +319,35 @@ class PaystackInitPaymentView(APIView):
             "reference": response.json().get("data", {}).get("reference")
         }, status=status.HTTP_200_OK)
 
-from .models import Payment
-from datetime import datetime
+
 
 class PaystackVerifyPaymentView(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
+        request_body=PaystackVerifyRequestSerializer,
         operation_summary="Verify Paystack payment",
-        operation_description="Verifies payment by reference and creates a vote if successful.",
+        operation_description="Verifies a Paystack transaction by reference and creates a vote if successful.",
+        responses={
+            201: openapi.Response(
+                description="Payment verified and vote recorded",
+                examples={
+                    "application/json": {
+                        "message": "Payment verified and vote recorded successfully.",
+                        "vote": {
+                            "contestant": "Michael Adu",
+                            "quantity": 3,
+                            "timestamp": "2025-06-01T12:00:00Z"
+                        }
+                    }
+                }
+            ),
+            409: "Payment already verified.",
+            400: "Invalid or missing reference."
+        },
         tags=["Payments"]
     )
+
     def post(self, request, *args, **kwargs):
         reference = request.data.get("reference")
         if not reference:

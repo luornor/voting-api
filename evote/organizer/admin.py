@@ -10,7 +10,7 @@ class PaymentAdmin(admin.ModelAdmin):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ('event_name', 'event_id', 'organizer', 'vote_type', 'price_per_vote', 'start_date', 'end_date')
+    list_display = ('id','event_name', 'event_id', 'organizer', 'vote_type', 'price_per_vote', 'start_date', 'end_date')
     search_fields = ('event_name', 'event_id', 'organizer__username')
     list_filter = ('vote_type', 'start_date', 'end_date')
     date_hierarchy = 'start_date'

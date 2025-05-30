@@ -4,10 +4,16 @@ from .models import Contestant
 from .models import Vote
 
 class ContestantSerializer(serializers.ModelSerializer):
+    event = serializers.SlugRelatedField(
+        queryset=Event.objects.all(),
+        slug_field='event_id'  # match the field you're submitting
+    )
+
     class Meta:
         model = Contestant
         fields = ['id', 'event', 'contestant_name', 'bio', 'photo_url', 'vote_count']
         read_only_fields = ['vote_count']
+
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -43,3 +49,13 @@ class VoteSerializer(serializers.ModelSerializer):
         price = obj.contestant.event.price_per_vote or 0
         return price * obj.quantity
 
+
+
+class PaystackInitRequestSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+    contestant_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1)
+    provider = serializers.ChoiceField(choices=["mtn", "vodafone", "airteltigo"])
+
+class PaystackVerifyRequestSerializer(serializers.Serializer):
+    reference = serializers.CharField()
