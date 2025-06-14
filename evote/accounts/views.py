@@ -47,6 +47,7 @@ def get_tokens_for_user(user):
 
 
 class RegisterView(CreateAPIView):
+    permission_classes = [AllowAny]
     queryset = CustomUser.objects.all()
     serializer_class = RegisterSerializer
 
@@ -68,6 +69,7 @@ class RegisterView(CreateAPIView):
 
 
 class LoginView(GenericAPIView):
+    permission_classes = [AllowAny]
     serializer_class = LoginSerializer
 
     @swagger_auto_schema(
