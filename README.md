@@ -126,7 +126,7 @@ python manage.py runserver
 After running the server, access Swagger documentation at:
 
 ```
-http://127.0.0.1:8000/swagger/
+http://127.0.0.1:8000/
 ```
 
 You can test every endpoint, see required fields, and view example responses.
